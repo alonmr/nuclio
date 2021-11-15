@@ -834,13 +834,40 @@ func (lc *lazyClient) createOrUpdateDeployment(functionLabels labels.Set,
 		deployment.Spec.Template.Spec.PriorityClassName = function.Spec.PriorityClassName
 		deployment.Spec.Template.Spec.PreemptionPolicy = function.Spec.PreemptionPolicy
 
-		// enrich deployment spec with default fields that were passed inside the platform configuration
-		// performed on update too, in case the platform config has been modified after the creation of this deployment
-		if err := lc.enrichDeploymentFromPlatformConfiguration(function, deployment, method); err != nil {
-			return nil, err
-		}
+		if function.Spec.DeletePreDeployment {
 
-		return lc.kubeClientSet.AppsV1().Deployments(function.Namespace).Update(deployment)
+			// Delete Deployment if exists
+			propagationPolicy := metav1.DeletePropagationForeground
+			deleteOptions := &metav1.DeleteOptions{
+				PropagationPolicy: &propagationPolicy,
+			}
+			deploymentName := kube.DeploymentNameFromFunctionName(function.Name)
+			err = lc.kubeClientSet.AppsV1().Deployments(function.Namespace).Delete(deploymentName, deleteOptions)
+			if err != nil {
+				if !apierrors.IsNotFound(err) {
+					return nil, errors.Wrap(err, "Failed to delete function pre deployment")
+				}
+			} else {
+				lc.logger.DebugWith("Deleted deployment",
+					"namespace", function.Namespace,
+					"deploymentName", deploymentName)
+			}
+
+			// enrich deployment spec with default fields that were passed inside the platform configuration
+			if err := lc.enrichDeploymentFromPlatformConfiguration(function, deployment, createDeploymentResourceMethod); err != nil {
+				return nil, err
+			}
+			return lc.kubeClientSet.AppsV1().Deployments(function.Namespace).Create(deployment)
+		} else {
+
+			// enrich deployment spec with default fields that were passed inside the platform configuration
+			// performed on update too, in case the platform config has been modified after the creation of this deployment
+			if err := lc.enrichDeploymentFromPlatformConfiguration(function, deployment, method); err != nil {
+				return nil, err
+			}
+
+			return lc.kubeClientSet.AppsV1().Deployments(function.Namespace).Update(deployment)
+		}
 	}
 
 	resource, err := lc.createOrUpdateResource("deployment",
