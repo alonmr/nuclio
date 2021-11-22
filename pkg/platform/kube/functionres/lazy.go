@@ -842,6 +842,9 @@ func (lc *lazyClient) createOrUpdateDeployment(functionLabels labels.Set,
 				PropagationPolicy: &propagationPolicy,
 			}
 			deploymentName := kube.DeploymentNameFromFunctionName(function.Name)
+			lc.logger.InfoWith("Deleting deployment",
+				"namespace", function.Namespace,
+				"deploymentName", deploymentName)
 			err = lc.kubeClientSet.AppsV1().Deployments(function.Namespace).Delete(deploymentName, deleteOptions)
 			if err != nil {
 				if !apierrors.IsNotFound(err) {
@@ -858,16 +861,15 @@ func (lc *lazyClient) createOrUpdateDeployment(functionLabels labels.Set,
 				return nil, err
 			}
 			return lc.kubeClientSet.AppsV1().Deployments(function.Namespace).Create(deployment)
-		} else {
-
-			// enrich deployment spec with default fields that were passed inside the platform configuration
-			// performed on update too, in case the platform config has been modified after the creation of this deployment
-			if err := lc.enrichDeploymentFromPlatformConfiguration(function, deployment, method); err != nil {
-				return nil, err
-			}
-
-			return lc.kubeClientSet.AppsV1().Deployments(function.Namespace).Update(deployment)
 		}
+
+		// enrich deployment spec with default fields that were passed inside the platform configuration
+		// performed on update too, in case the platform config has been modified after the creation of this deployment
+		if err := lc.enrichDeploymentFromPlatformConfiguration(function, deployment, method); err != nil {
+			return nil, err
+		}
+
+		return lc.kubeClientSet.AppsV1().Deployments(function.Namespace).Update(deployment)
 	}
 
 	resource, err := lc.createOrUpdateResource("deployment",

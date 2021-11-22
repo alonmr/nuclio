@@ -46,7 +46,8 @@ func NewUpdater(parentLogger logger.Logger, consumer *Consumer, platform platfor
 }
 
 func (u *Updater) Update(updateFunctionOptions *platform.UpdateFunctionOptions) error {
-	u.logger.InfoWith("Updating function", "name", updateFunctionOptions.FunctionMeta.Name)
+	u.logger.InfoWith("Updating function", "name", updateFunctionOptions.FunctionMeta.Name,
+		"pre", updateFunctionOptions.FunctionSpec.DeletePreDeployment)
 
 	// get specific function CR
 	function, err := u.consumer.NuclioClientSet.NuclioV1beta1().

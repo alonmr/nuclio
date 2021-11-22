@@ -78,6 +78,7 @@ type deployCommandeer struct {
 	runAsGroup                      int64
 	fsGroup                         int64
 	overrideHTTPTriggerServiceType  string
+	deletePreDeployment             bool
 }
 
 func newDeployCommandeer(rootCommandeer *RootCommandeer) *deployCommandeer {
@@ -421,6 +422,10 @@ func (d *deployCommandeer) enrichConfigWithBoolArgs() {
 
 	if d.publish {
 		d.functionConfig.Spec.Publish = d.publish
+	}
+
+	if d.deletePreDeployment {
+		d.functionConfig.Spec.DeletePreDeployment = d.deletePreDeployment
 	}
 }
 
