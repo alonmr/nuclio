@@ -1,5 +1,4 @@
-// +build test_integration
-// +build test_kube
+//go:build test_integration && test_kube
 
 /*
 Copyright 2017 The Nuclio Authors.
@@ -30,8 +29,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ghodss/yaml"
-	"github.com/nuclio/errors"
 	"github.com/nuclio/nuclio/pkg/cmdrunner"
 	"github.com/nuclio/nuclio/pkg/common"
 	"github.com/nuclio/nuclio/pkg/errgroup"
@@ -47,16 +44,18 @@ import (
 	"github.com/nuclio/nuclio/pkg/platformconfig"
 	processorsuite "github.com/nuclio/nuclio/pkg/processor/test/suite"
 
+	"github.com/ghodss/yaml"
+	"github.com/nuclio/errors"
 	"github.com/rs/xid"
 	appsv1 "k8s.io/api/apps/v1"
 	"k8s.io/api/core/v1"
-	extensionsv1beta1 "k8s.io/api/extensions/v1beta1"
+	networkingv1 "k8s.io/api/networking/v1"
 	kubeapierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 )
 
-type OnAfterIngressCreated func(*extensionsv1beta1.Ingress)
+type OnAfterIngressCreated func(*networkingv1.Ingress)
 
 type KubeTestSuite struct {
 	processorsuite.TestSuite
@@ -68,15 +67,19 @@ type KubeTestSuite struct {
 	FunctionClient    functionres.Client
 
 	DisableControllerStart bool
+	Ctx                    context.Context
 }
 
-// To run this test suite you should:
+// SetupSuite To run this test suite you should:
+// - Have Helm 3 Installed - click here for instructions https://helm.sh/docs/intro/install
 // - Kubernetes for Mac: Ingress controller installed (you can install it by running "test/k8s/ci_assets/install_nginx_ingress_controller.sh")
 // - have Nuclio CRDs installed (you can install them by running "test/k8s/ci_assets/install_nuclio_crds.sh")
 // - have docker registry running (you can run docker registry by running "docker run --rm -d -p 5000:5000 registry:2")
 // - use "(kube) - platform test" run configuration via GoLand to run your test
 func (suite *KubeTestSuite) SetupSuite() {
 	var err error
+
+	suite.Ctx = context.Background()
 
 	common.SetVersionFromEnv()
 	suite.Namespace = common.GetEnvOrDefaultString("NUCLIO_TEST_NAMESPACE", "default")
@@ -119,7 +122,7 @@ func (suite *KubeTestSuite) SetupSuite() {
 	if !suite.DisableControllerStart {
 
 		// start controller
-		if err := suite.Controller.Start(); err != nil {
+		if err := suite.Controller.Start(suite.Ctx); err != nil {
 			suite.Require().NoError(err, "Failed to start controller")
 		}
 	}
@@ -129,7 +132,7 @@ func (suite *KubeTestSuite) SetupTest() {
 	suite.TestSuite.SetupTest()
 
 	// default project gets deleted during testings, ensure it is being recreated
-	err := suite.Platform.EnsureDefaultProjectExistence()
+	err := suite.Platform.EnsureDefaultProjectExistence(suite.Ctx)
 	suite.Require().NoError(err, "Failed to ensure default project exists")
 }
 
@@ -146,7 +149,7 @@ func (suite *KubeTestSuite) TearDownTest() {
 	}()
 
 	// remove nuclio function leftovers
-	errGroup, _ := errgroup.WithContext(context.TODO(), suite.Logger)
+	errGroup, _ := errgroup.WithContext(suite.Ctx, suite.Logger)
 	for _, resourceKind := range []string{
 		"nucliofunctions",
 		"nuclioprojects",
@@ -166,11 +169,15 @@ func (suite *KubeTestSuite) TearDownTest() {
 	err := common.RetryUntilSuccessful(5*time.Minute,
 		5*time.Second,
 		func() bool {
-			results, err := suite.executeKubectl([]string{"get", "all"},
+			results, err := suite.executeKubectl(
+				[]string{"get", "all"},
 				map[string]string{
 					"selector": "nuclio.io/app",
 				})
 			if err != nil {
+				suite.Logger.DebugWithCtx(suite.Ctx,
+					"Kubectl execution failed, retrying...",
+					"err", err.Error())
 				return false
 			}
 			return strings.Contains(results.Output, "No resources found in")
@@ -238,39 +245,48 @@ func (suite *KubeTestSuite) GetFunctionAndExpectState(getFunctionOptions *platfo
 	return function
 }
 
-func (suite *KubeTestSuite) TryGetAndUnmarshalFunctionRecordedEvents(functionURL string,
+func (suite *KubeTestSuite) TryGetAndUnmarshalFunctionRecordedEvents(ctx context.Context,
+	functionURL string,
 	retryDuration time.Duration,
 	events interface{}) {
 	err := common.RetryUntilSuccessful(retryDuration,
 		2*time.Second,
 		func() bool {
-			suite.Logger.DebugWith("Trying to get recorded events", "functionURL", functionURL)
+			suite.Logger.DebugWithCtx(ctx, "Trying to get recorded events", "functionURL", functionURL)
 
 			// invoke function
 			httpResponse, err := http.Get(functionURL)
 			if err != nil {
-				suite.Logger.WarnWith("Failed to get function recorded events",
+				suite.Logger.WarnWithCtx(ctx, "Failed to get function recorded events",
 					"functionURL", functionURL,
-					"err", err)
+					"err", err.Error())
+				return false
+			}
+
+			if httpResponse.StatusCode == http.StatusServiceUnavailable {
+				suite.Logger.WarnWithCtx(ctx, "Function is not yet available", "functionURL", functionURL)
 				return false
 			}
 
 			// read response body
 			responseBody, err := ioutil.ReadAll(httpResponse.Body)
 			if err != nil {
-				suite.Logger.WarnWith("Failed to read response body", "err", err)
+				suite.Logger.WarnWithCtx(ctx,
+					"Failed to read response body",
+					"err", err.Error())
 				return false
 			}
 
 			// unmarshal recorded events
-			if err = json.Unmarshal(responseBody, &events); err != nil {
-				suite.Logger.WarnWith("Failed to unmarshal response body",
-					"responseBody", responseBody,
-					"err", err)
+			if err := json.Unmarshal(responseBody, &events); err != nil {
+				suite.Logger.WarnWithCtx(ctx,
+					"Failed to unmarshal response body",
+					"responseBody", string(responseBody),
+					"err", err.Error())
 				return false
 			}
 
-			// events has not been unmarshalled yet, responseBody might be empty
+			// events were not been unmarshalled yet, responseBody might be empty
 			if events == nil {
 				return false
 			}
@@ -289,20 +305,21 @@ func (suite *KubeTestSuite) TryGetAndUnmarshalFunctionRecordedEvents(functionURL
 		})
 
 	suite.Require().NoError(err)
-	suite.Logger.DebugWith("Got events from event recorder function",
+	suite.Logger.DebugWithCtx(ctx,
+		"Got events from event recorder function",
 		"events", events)
 }
 
 func (suite *KubeTestSuite) GetAPIGateway(getAPIGatewayOptions *platform.GetAPIGatewaysOptions) platform.APIGateway {
 
 	// get the function
-	apiGateways, err := suite.Platform.GetAPIGateways(getAPIGatewayOptions)
+	apiGateways, err := suite.Platform.GetAPIGateways(suite.Ctx, getAPIGatewayOptions)
 	suite.Require().NoError(err)
 	return apiGateways[0]
 }
 
 func (suite *KubeTestSuite) GetProject(getProjectFunctions *platform.GetProjectsOptions) platform.Project {
-	projects, err := suite.Platform.GetProjects(getProjectFunctions)
+	projects, err := suite.Platform.GetProjects(suite.Ctx, getProjectFunctions)
 	suite.Require().NoError(err, "Failed to get projects")
 	return projects[0]
 }
@@ -315,16 +332,16 @@ func (suite *KubeTestSuite) GetFunctionDeployment(functionName string) *appsv1.D
 	return deploymentInstance
 }
 
-func (suite *KubeTestSuite) GetAPIGatewayIngress(apiGatewayName string, canary bool) *extensionsv1beta1.Ingress {
-	ingressInstance := &extensionsv1beta1.Ingress{}
+func (suite *KubeTestSuite) GetAPIGatewayIngress(apiGatewayName string, canary bool) *networkingv1.Ingress {
+	ingressInstance := &networkingv1.Ingress{}
 	suite.GetResourceAndUnmarshal("ingress",
 		kube.IngressNameFromAPIGatewayName(apiGatewayName, canary),
 		ingressInstance)
 	return ingressInstance
 }
 
-func (suite *KubeTestSuite) GetFunctionIngress(functionName string) *extensionsv1beta1.Ingress {
-	ingressInstance := &extensionsv1beta1.Ingress{}
+func (suite *KubeTestSuite) GetFunctionIngress(functionName string) *networkingv1.Ingress {
+	ingressInstance := &networkingv1.Ingress{}
 	suite.GetResourceAndUnmarshal("ingress",
 		kube.IngressNameFromFunctionName(functionName),
 		ingressInstance)
@@ -336,20 +353,20 @@ func (suite *KubeTestSuite) WithResourceQuota(rq *v1.ResourceQuota, handler func
 	resourceQuota, err := suite.KubeClientSet.
 		CoreV1().
 		ResourceQuotas(suite.Namespace).
-		Create(rq)
+		Create(suite.Ctx, rq, metav1.CreateOptions{})
 	suite.Require().NoError(err)
 
 	// clean leftovers
 	defer suite.KubeClientSet.
 		CoreV1().
 		ResourceQuotas(suite.Namespace).
-		Delete(resourceQuota.Name, &metav1.DeleteOptions{}) // nolint: errcheck
+		Delete(suite.Ctx, resourceQuota.Name, metav1.DeleteOptions{}) // nolint: errcheck
 
 	handler()
 }
 
 func (suite *KubeTestSuite) GetFunctionPods(functionName string) []v1.Pod {
-	pods, err := suite.KubeClientSet.CoreV1().Pods(suite.Namespace).List(metav1.ListOptions{
+	pods, err := suite.KubeClientSet.CoreV1().Pods(suite.Namespace).List(suite.Ctx, metav1.ListOptions{
 		LabelSelector: fmt.Sprintf("nuclio.io/function-name=%s", functionName),
 	})
 
@@ -372,14 +389,14 @@ func (suite *KubeTestSuite) UnCordonNode(nodeName string) error {
 }
 
 func (suite *KubeTestSuite) GetNodes() []v1.Node {
-	nodesList, err := suite.KubeClientSet.CoreV1().Nodes().List(metav1.ListOptions{})
+	nodesList, err := suite.KubeClientSet.CoreV1().Nodes().List(suite.Ctx, metav1.ListOptions{})
 	suite.Require().NoError(err)
 	return nodesList.Items
 }
 
 func (suite *KubeTestSuite) DeleteFunctionPods(functionName string) {
 	suite.Logger.InfoWith("Deleting function pods", "functionName", functionName)
-	errGroup, _ := errgroup.WithContext(context.TODO(), suite.Logger)
+	errGroup, _ := errgroup.WithContext(suite.Ctx, suite.Logger)
 	for _, pod := range suite.GetFunctionPods(functionName) {
 		pod := pod
 		errGroup.Go("Delete function pods", func() error {
@@ -389,7 +406,7 @@ func (suite *KubeTestSuite) DeleteFunctionPods(functionName string) {
 			return suite.KubeClientSet.
 				CoreV1().
 				Pods(suite.Namespace).
-				Delete(pod.Name, metav1.NewDeleteOptions(0))
+				Delete(suite.Ctx, pod.Name, *metav1.NewDeleteOptions(0))
 		})
 	}
 	suite.Require().NoError(errGroup.Wait(), "Failed to delete function pods")
@@ -409,7 +426,7 @@ func (suite *KubeTestSuite) CreateImportedFunction(functionName, projectName str
 	}
 	createFunctionOptions.FunctionConfig.Meta.Labels[common.NuclioResourceLabelKeyProjectName] = projectName
 	suite.PopulateDeployOptions(createFunctionOptions)
-	_, err := suite.Platform.CreateFunction(createFunctionOptions)
+	_, err := suite.Platform.CreateFunction(suite.Ctx, createFunctionOptions)
 	suite.Require().NoError(err)
 	suite.WaitForFunctionState(&platform.GetFunctionsOptions{
 		Name:      createFunctionOptions.FunctionConfig.Meta.Name,
@@ -494,14 +511,14 @@ func (suite *KubeTestSuite) DeployAPIGateway(createAPIGatewayOptions *platform.C
 	onAfterIngressCreated OnAfterIngressCreated) error {
 
 	// deploy the api gateway
-	if err := suite.Platform.CreateAPIGateway(createAPIGatewayOptions); err != nil {
+	if err := suite.Platform.CreateAPIGateway(suite.Ctx, createAPIGatewayOptions); err != nil {
 		return err
 	}
 
 	// delete the api gateway when done
 	defer func() {
 		suite.Logger.Debug("Deleting deployed api gateway")
-		err := suite.Platform.DeleteAPIGateway(&platform.DeleteAPIGatewayOptions{
+		err := suite.Platform.DeleteAPIGateway(suite.Ctx, &platform.DeleteAPIGatewayOptions{
 			Meta: createAPIGatewayOptions.APIGatewayConfig.Meta,
 		})
 		suite.Require().NoError(err)
@@ -517,10 +534,10 @@ func (suite *KubeTestSuite) DeployAPIGateway(createAPIGatewayOptions *platform.C
 	return nil
 }
 
-func (suite *KubeTestSuite) verifyAPIGatewayIngress(createAPIGatewayOptions *platform.CreateAPIGatewayOptions, exist bool) *extensionsv1beta1.Ingress {
+func (suite *KubeTestSuite) verifyAPIGatewayIngress(createAPIGatewayOptions *platform.CreateAPIGatewayOptions, exist bool) *networkingv1.Ingress {
 	deadline := time.Now().Add(10 * time.Second)
 
-	var ingressObject *extensionsv1beta1.Ingress
+	var ingressObject *networkingv1.Ingress
 	var err error
 
 	for {
@@ -531,9 +548,10 @@ func (suite *KubeTestSuite) verifyAPIGatewayIngress(createAPIGatewayOptions *pla
 		}
 
 		ingressObject, err = suite.KubeClientSet.
-			ExtensionsV1beta1().
+			NetworkingV1().
 			Ingresses(suite.Namespace).
-			Get(
+			Get(suite.Ctx,
+
 				// TODO: consider canary ingress as well
 				kube.IngressNameFromAPIGatewayName(createAPIGatewayOptions.APIGatewayConfig.Meta.Name, false),
 				metav1.GetOptions{})

@@ -18,6 +18,7 @@ package build
 
 import (
 	"bytes"
+	"context"
 	"encoding/base64"
 	"fmt"
 	"io/ioutil"
@@ -769,7 +770,7 @@ func (b *Builder) decompressFunctionArchive(functionPath string) (string, error)
 }
 
 func (b *Builder) resolveGithubArchiveWorkDir(decompressDir string) (string, error) {
-	directories, err := ioutil.ReadDir(decompressDir)
+	directories, err := os.ReadDir(decompressDir)
 	if err != nil {
 		return "", errors.Wrap(err, "Failed to list decompressed directory tree")
 	}
@@ -1055,23 +1056,24 @@ func (b *Builder) buildProcessorImage() (string, error) {
 		"registryURL", registryURL,
 		"imageName", imageName)
 
-	err = b.platform.BuildAndPushContainerImage(&containerimagebuilderpusher.BuildOptions{
-		ContextDir:     b.stagingDir,
-		Image:          imageName,
-		TempDir:        b.tempDir,
-		DockerfileInfo: processorDockerfileInfo,
+	err = b.platform.BuildAndPushContainerImage(context.Background(),
+		&containerimagebuilderpusher.BuildOptions{
+			ContextDir:     b.stagingDir,
+			Image:          imageName,
+			TempDir:        b.tempDir,
+			DockerfileInfo: processorDockerfileInfo,
 
-		// Conjunct Pull with NoCache
-		// To ensure that when forcing a function build, the base images would be pulled as well.
-		Pull:                b.options.FunctionConfig.Spec.Build.NoCache,
-		NoCache:             b.options.FunctionConfig.Spec.Build.NoCache,
-		NoBaseImagePull:     b.GetNoBaseImagePull(),
-		BuildArgs:           buildArgs,
-		RegistryURL:         registryURL,
-		SecretName:          b.options.FunctionConfig.Spec.ImagePullSecrets,
-		OutputImageFile:     b.options.OutputImageFile,
-		BuildTimeoutSeconds: b.resolveBuildTimeoutSeconds(),
-	})
+			// Conjunct Pull with NoCache
+			// To ensure that when forcing a function build, the base images would be pulled as well.
+			Pull:                b.options.FunctionConfig.Spec.Build.NoCache,
+			NoCache:             b.options.FunctionConfig.Spec.Build.NoCache,
+			NoBaseImagePull:     b.GetNoBaseImagePull(),
+			BuildArgs:           buildArgs,
+			RegistryURL:         registryURL,
+			SecretName:          b.options.FunctionConfig.Spec.ImagePullSecrets,
+			OutputImageFile:     b.options.OutputImageFile,
+			BuildTimeoutSeconds: b.resolveBuildTimeoutSeconds(),
+		})
 
 	return imageName, err
 }
@@ -1708,7 +1710,7 @@ func (b *Builder) downloadFunctionFromURL(tempFile *os.File,
 func (b *Builder) populateFunctionSourceCodeFromFilePath() {
 	functionSourceCode, err := b.getSourceCodeFromFilePath()
 	if err != nil {
-		b.logger.DebugWith("Not populating function source code", "reason", errors.Cause(err))
+		b.logger.DebugWith("Not populating function source code", "reason", errors.Cause(err).Error())
 	} else {
 
 		// set into source code

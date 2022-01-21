@@ -17,6 +17,8 @@ limitations under the License.
 package command
 
 import (
+	"context"
+
 	"github.com/nuclio/nuclio/pkg/functionconfig"
 	"github.com/nuclio/nuclio/pkg/nuctl/command/common"
 	"github.com/nuclio/nuclio/pkg/platform"
@@ -31,7 +33,7 @@ type getCommandeer struct {
 	rootCommandeer *RootCommandeer
 }
 
-func newGetCommandeer(rootCommandeer *RootCommandeer) *getCommandeer {
+func newGetCommandeer(ctx context.Context, rootCommandeer *RootCommandeer) *getCommandeer {
 	commandeer := &getCommandeer{
 		rootCommandeer: rootCommandeer,
 	}
@@ -41,10 +43,10 @@ func newGetCommandeer(rootCommandeer *RootCommandeer) *getCommandeer {
 		Short: "Display resource information",
 	}
 
-	getFunctionCommand := newGetFunctionCommandeer(commandeer).cmd
-	getProjectCommand := newGetProjectCommandeer(commandeer).cmd
-	getFunctionEventCommand := newGetFunctionEventCommandeer(commandeer).cmd
-	getAPIGatewayCommand := newGetAPIGatewayCommandeer(commandeer).cmd
+	getFunctionCommand := newGetFunctionCommandeer(ctx, commandeer).cmd
+	getProjectCommand := newGetProjectCommandeer(ctx, commandeer).cmd
+	getFunctionEventCommand := newGetFunctionEventCommandeer(ctx, commandeer).cmd
+	getAPIGatewayCommand := newGetAPIGatewayCommandeer(ctx, commandeer).cmd
 
 	cmd.AddCommand(
 		getFunctionCommand,
@@ -64,7 +66,7 @@ type getFunctionCommandeer struct {
 	output              string
 }
 
-func newGetFunctionCommandeer(getCommandeer *getCommandeer) *getFunctionCommandeer {
+func newGetFunctionCommandeer(ctx context.Context, getCommandeer *getCommandeer) *getFunctionCommandeer {
 	commandeer := &getFunctionCommandeer{
 		getCommandeer: getCommandeer,
 	}
@@ -89,7 +91,7 @@ func newGetFunctionCommandeer(getCommandeer *getCommandeer) *getFunctionCommande
 
 			commandeer.getFunctionsOptions.Namespace = getCommandeer.rootCommandeer.namespace
 
-			functions, err := getCommandeer.rootCommandeer.platform.GetFunctions(&commandeer.getFunctionsOptions)
+			functions, err := getCommandeer.rootCommandeer.platform.GetFunctions(ctx, &commandeer.getFunctionsOptions)
 			if err != nil {
 				return errors.Wrap(err, "Failed to get functions")
 			}
@@ -103,7 +105,8 @@ func newGetFunctionCommandeer(getCommandeer *getCommandeer) *getFunctionCommande
 			}
 
 			// render the functions
-			return common.RenderFunctions(commandeer.rootCommandeer.loggerInstance,
+			return common.RenderFunctions(ctx,
+				commandeer.rootCommandeer.loggerInstance,
 				functions,
 				commandeer.output,
 				cmd.OutOrStdout(),
@@ -138,7 +141,7 @@ type getProjectCommandeer struct {
 	output             string
 }
 
-func newGetProjectCommandeer(getCommandeer *getCommandeer) *getProjectCommandeer {
+func newGetProjectCommandeer(ctx context.Context, getCommandeer *getCommandeer) *getProjectCommandeer {
 	commandeer := &getProjectCommandeer{
 		getCommandeer: getCommandeer,
 	}
@@ -164,7 +167,7 @@ func newGetProjectCommandeer(getCommandeer *getCommandeer) *getProjectCommandeer
 			// get namespace
 			commandeer.getProjectsOptions.Meta.Namespace = getCommandeer.rootCommandeer.namespace
 
-			projects, err := getCommandeer.rootCommandeer.platform.GetProjects(&commandeer.getProjectsOptions)
+			projects, err := getCommandeer.rootCommandeer.platform.GetProjects(ctx, &commandeer.getProjectsOptions)
 			if err != nil {
 				return errors.Wrap(err, "Failed to get projects")
 			}
@@ -178,7 +181,11 @@ func newGetProjectCommandeer(getCommandeer *getCommandeer) *getProjectCommandeer
 			}
 
 			// render the projects
-			return common.RenderProjects(projects, commandeer.output, cmd.OutOrStdout(), commandeer.renderProjectConfig)
+			return common.RenderProjects(ctx,
+				projects,
+				commandeer.output,
+				cmd.OutOrStdout(),
+				commandeer.renderProjectConfig)
 		},
 	}
 
@@ -189,7 +196,7 @@ func newGetProjectCommandeer(getCommandeer *getCommandeer) *getProjectCommandeer
 	return commandeer
 }
 
-func (g *getProjectCommandeer) renderProjectConfig(projects []platform.Project, renderer func(interface{}) error) error {
+func (g *getProjectCommandeer) renderProjectConfig(ctx context.Context, projects []platform.Project, renderer func(interface{}) error) error {
 	for _, project := range projects {
 		if err := renderer(project.GetConfig()); err != nil {
 			return errors.Wrap(err, "Failed to render project config")
@@ -205,7 +212,7 @@ type getAPIGatewayCommandeer struct {
 	output                string
 }
 
-func newGetAPIGatewayCommandeer(getCommandeer *getCommandeer) *getAPIGatewayCommandeer {
+func newGetAPIGatewayCommandeer(ctx context.Context, getCommandeer *getCommandeer) *getAPIGatewayCommandeer {
 	commandeer := &getAPIGatewayCommandeer{
 		getCommandeer: getCommandeer,
 	}
@@ -230,7 +237,7 @@ func newGetAPIGatewayCommandeer(getCommandeer *getCommandeer) *getAPIGatewayComm
 
 			commandeer.getAPIGatewaysOptions.Namespace = getCommandeer.rootCommandeer.namespace
 
-			apiGateways, err := getCommandeer.rootCommandeer.platform.GetAPIGateways(&commandeer.getAPIGatewaysOptions)
+			apiGateways, err := getCommandeer.rootCommandeer.platform.GetAPIGateways(ctx, &commandeer.getAPIGatewaysOptions)
 			if err != nil {
 				return errors.Wrap(err, "Failed to get api gateways")
 			}
@@ -272,7 +279,7 @@ type getFunctionEventCommandeer struct {
 	functionName             string
 }
 
-func newGetFunctionEventCommandeer(getCommandeer *getCommandeer) *getFunctionEventCommandeer {
+func newGetFunctionEventCommandeer(ctx context.Context, getCommandeer *getCommandeer) *getFunctionEventCommandeer {
 	commandeer := &getFunctionEventCommandeer{
 		getCommandeer: getCommandeer,
 	}
@@ -303,7 +310,8 @@ func newGetFunctionEventCommandeer(getCommandeer *getCommandeer) *getFunctionEve
 				}
 			}
 
-			functionEvents, err := getCommandeer.rootCommandeer.platform.GetFunctionEvents(&commandeer.getFunctionEventsOptions)
+			functionEvents, err := getCommandeer.rootCommandeer.platform.GetFunctionEvents(ctx,
+				&commandeer.getFunctionEventsOptions)
 			if err != nil {
 				return errors.Wrap(err, "Failed to get function events")
 			}

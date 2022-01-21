@@ -1,4 +1,4 @@
-// +build test_unit
+//go:build test_unit
 
 //
 // cannot reside with server.go because of dependency cycle by "github.com/nuclio/nuclio/pkg/dashboard/resource"
@@ -24,6 +24,7 @@ package test
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -61,6 +62,7 @@ type dashboardTestSuite struct {
 	dashboardServer *dashboard.Server
 	httpServer      *httptest.Server
 	mockPlatform    *mockplatform.Platform
+	ctx             context.Context
 }
 
 func (suite *dashboardTestSuite) SetupTest() {
@@ -68,6 +70,7 @@ func (suite *dashboardTestSuite) SetupTest() {
 	trueValue := true
 
 	suite.logger, _ = nucliozap.NewNuclioZapTest("test")
+	suite.ctx = context.Background()
 	suite.mockPlatform = &mockplatform.Platform{}
 
 	templateRepository, err := functiontemplates.NewRepository(suite.logger, []functiontemplates.FunctionTemplateFetcher{})
@@ -194,7 +197,7 @@ func (suite *functionTestSuite) TestGetDetailSuccessful() {
 	}
 
 	suite.mockPlatform.
-		On("GetFunctions", mock.MatchedBy(verifyGetFunctions)).
+		On("GetFunctions", mock.Anything, mock.MatchedBy(verifyGetFunctions)).
 		Return([]platform.Function{&returnedFunction}, nil).
 		Once()
 
@@ -261,7 +264,7 @@ func (suite *functionTestSuite) TestGetListSuccessful() {
 	}
 
 	suite.mockPlatform.
-		On("GetFunctions", mock.MatchedBy(verifyGetFunctions)).
+		On("GetFunctions", mock.Anything, mock.MatchedBy(verifyGetFunctions)).
 		Return([]platform.Function{&returnedFunction1, &returnedFunction2}, nil).
 		Once()
 
@@ -342,12 +345,12 @@ func (suite *functionTestSuite) TestCreateSuccessful() {
 	}
 
 	suite.mockPlatform.
-		On("CreateFunction", mock.MatchedBy(verifyCreateFunction)).
+		On("CreateFunction", mock.Anything, mock.MatchedBy(verifyCreateFunction)).
 		Return(&platform.CreateFunctionResult{}, nil).
 		Once()
 
 	suite.mockPlatform.
-		On("GetFunctions", mock.MatchedBy(verifyGetFunctions)).
+		On("GetFunctions", mock.Anything, mock.MatchedBy(verifyGetFunctions)).
 		Return([]platform.Function{}, nil).
 		Once()
 
@@ -440,7 +443,7 @@ func (suite *functionTestSuite) TestUpdateSuccessful() {
 	}
 
 	suite.mockPlatform.
-		On("UpdateFunction", mock.MatchedBy(verifyUpdateFunction)).
+		On("UpdateFunction", mock.Anything, mock.MatchedBy(verifyUpdateFunction)).
 		Return(nil).
 		Once()
 
@@ -501,7 +504,7 @@ func (suite *functionTestSuite) TestDeleteSuccessful() {
 	}
 
 	suite.mockPlatform.
-		On("DeleteFunction", mock.MatchedBy(verifyDeleteFunction)).
+		On("DeleteFunction", mock.Anything, mock.MatchedBy(verifyDeleteFunction)).
 		Return(nil).
 		Once()
 
@@ -596,7 +599,7 @@ func (suite *functionTestSuite) TestInvokeUnSuccessful() {
 	}
 
 	suite.mockPlatform.
-		On("CreateFunctionInvocation", mock.MatchedBy(verifyCreateFunctionInvocation)).
+		On("CreateFunctionInvocation", mock.Anything, mock.MatchedBy(verifyCreateFunctionInvocation)).
 		Return(&expectedInvokeResult, nuclio.NewErrBadRequest(errMessage)).
 		Once()
 
@@ -680,7 +683,7 @@ func (suite *functionTestSuite) TestInvokeSuccessful() {
 	}
 
 	suite.mockPlatform.
-		On("CreateFunctionInvocation", mock.MatchedBy(verifyCreateFunctionInvocation)).
+		On("CreateFunctionInvocation", mock.Anything, mock.MatchedBy(verifyCreateFunctionInvocation)).
 		Return(&expectedInvokeResult, nil).
 		Once()
 
@@ -756,7 +759,7 @@ func (suite *functionTestSuite) TestExportFunctionSuccessful() {
 	}
 
 	suite.mockPlatform.
-		On("GetFunctions", mock.MatchedBy(verifyGetFunctionsOptions)).
+		On("GetFunctions", mock.Anything, mock.MatchedBy(verifyGetFunctionsOptions)).
 		Return([]platform.Function{&returnedFunction}, nil).
 		Once()
 
@@ -813,7 +816,7 @@ func (suite *functionTestSuite) TestExportFunctionListSuccessful() {
 	}
 
 	suite.mockPlatform.
-		On("GetFunctions", mock.MatchedBy(verifyGetFunctionsOptions)).
+		On("GetFunctions", mock.Anything, mock.MatchedBy(verifyGetFunctionsOptions)).
 		Return([]platform.Function{&returnedFunction1, &returnedFunction2}, nil).
 		Once()
 
@@ -903,7 +906,7 @@ func (suite *functionTestSuite) sendRequestWithExistingName(method string) {
 		return true
 	}
 	suite.mockPlatform.
-		On("GetFunctions", mock.MatchedBy(verifyGetFunctions)).
+		On("GetFunctions", mock.Anything, mock.MatchedBy(verifyGetFunctions)).
 		Return([]platform.Function{&returnedFunction}, nil).
 		Once()
 
@@ -994,7 +997,7 @@ func (suite *projectTestSuite) TestGetDetailSuccessful() {
 	}
 
 	suite.mockPlatform.
-		On("GetProjects", mock.MatchedBy(verifyGetProjects)).
+		On("GetProjects", mock.Anything, mock.MatchedBy(verifyGetProjects)).
 		Return([]platform.Project{&returnedProject}, nil).
 		Once()
 
@@ -1057,7 +1060,7 @@ func (suite *projectTestSuite) TestGetListSuccessful() {
 	}
 
 	suite.mockPlatform.
-		On("GetProjects", mock.MatchedBy(verifyGetProjects)).
+		On("GetProjects", mock.Anything, mock.MatchedBy(verifyGetProjects)).
 		Return([]platform.Project{&returnedProject1, &returnedProject2}, nil).
 		Once()
 
@@ -1174,25 +1177,25 @@ func (suite *projectTestSuite) TestExportProjectSuccessful() {
 	}
 
 	suite.mockPlatform.
-		On("GetProjects", mock.MatchedBy(verifyGetProjects)).
+		On("GetProjects", mock.Anything, mock.MatchedBy(verifyGetProjects)).
 		Return([]platform.Project{&returnedProject1}, nil).
 		Once()
 
 	suite.mockPlatform.
-		On("GetFunctions", mock.MatchedBy(verifyGetFunctions)).
+		On("GetFunctions", mock.Anything, mock.MatchedBy(verifyGetFunctions)).
 		Return([]platform.Function{&returnedFunction1, &returnedFunction2}, nil).
 		Once()
 
 	suite.mockPlatform.
-		On("GetFunctionEvents", mock.MatchedBy(verifyGetFunction1Events)).
+		On("GetFunctionEvents", mock.Anything, mock.MatchedBy(verifyGetFunction1Events)).
 		Return([]platform.FunctionEvent{&returnedFunctionEvent}, nil).Once()
 
 	suite.mockPlatform.
-		On("GetFunctionEvents", mock.MatchedBy(verifyGetFunction2Events)).
+		On("GetFunctionEvents", mock.Anything, mock.MatchedBy(verifyGetFunction2Events)).
 		Return([]platform.FunctionEvent{}, nil).Once()
 
 	suite.mockPlatform.
-		On("GetAPIGateways", mock.MatchedBy(verifyGetAPIGateways)).
+		On("GetAPIGateways", mock.Anything, mock.MatchedBy(verifyGetAPIGateways)).
 		Return([]platform.APIGateway{&returnedAPIGateway1}, nil).
 		Once()
 
@@ -1334,32 +1337,32 @@ func (suite *projectTestSuite) TestExportProjectListSuccessful() {
 	}
 
 	suite.mockPlatform.
-		On("GetProjects", mock.MatchedBy(verifyGetProjects)).
+		On("GetProjects", mock.Anything, mock.MatchedBy(verifyGetProjects)).
 		Return([]platform.Project{&returnedProject1, &returnedProject2}, nil).
 		Once()
 
 	suite.mockPlatform.
-		On("GetFunctions", mock.MatchedBy(verifyGetFunctions)).
+		On("GetFunctions", mock.Anything, mock.MatchedBy(verifyGetFunctions)).
 		Return([]platform.Function{&returnedFunction1}, nil).
 		Once()
 
 	suite.mockPlatform.
-		On("GetFunctions", mock.MatchedBy(verifyGetFunctions)).
+		On("GetFunctions", mock.Anything, mock.MatchedBy(verifyGetFunctions)).
 		Return([]platform.Function{&returnedFunction2}, nil).
 		Once()
 
 	suite.mockPlatform.
-		On("GetAPIGateways", mock.MatchedBy(verifyGetAPIGateways)).
+		On("GetAPIGateways", mock.Anything, mock.MatchedBy(verifyGetAPIGateways)).
 		Return([]platform.APIGateway{&returnedAPIGateway1}, nil).
 		Once()
 
 	suite.mockPlatform.
-		On("GetAPIGateways", mock.MatchedBy(verifyGetAPIGateways)).
+		On("GetAPIGateways", mock.Anything, mock.MatchedBy(verifyGetAPIGateways)).
 		Return([]platform.APIGateway{&returnedAPIGateway2}, nil).
 		Once()
 
 	suite.mockPlatform.
-		On("GetFunctionEvents", mock.MatchedBy(verifyGetFunctionEvents)).
+		On("GetFunctionEvents", mock.Anything, mock.MatchedBy(verifyGetFunctionEvents)).
 		Return([]platform.FunctionEvent{}, nil).Twice()
 
 	headers := map[string]string{
@@ -1465,7 +1468,7 @@ func (suite *projectTestSuite) TestCreateSuccessful() {
 	}
 
 	suite.mockPlatform.
-		On("CreateProject", mock.MatchedBy(verifyCreateProject)).
+		On("CreateProject", mock.Anything, mock.MatchedBy(verifyCreateProject)).
 		Return(nil).
 		Once()
 
@@ -1506,7 +1509,7 @@ func (suite *projectTestSuite) TestCreateNoMetadata() {
 
 func (suite *projectTestSuite) TestCreateNoName() {
 	suite.mockPlatform.
-		On("CreateProject", mock.Anything).
+		On("CreateProject", mock.Anything, mock.Anything).
 		Return(nil).
 		Once()
 
@@ -1559,7 +1562,7 @@ func (suite *projectTestSuite) TestUpdateSuccessful() {
 	}
 
 	suite.mockPlatform.
-		On("UpdateProject", mock.MatchedBy(verifyUpdateProject)).
+		On("UpdateProject", mock.Anything, mock.MatchedBy(verifyUpdateProject)).
 		Return(nil).
 		Once()
 
@@ -1607,7 +1610,7 @@ func (suite *projectTestSuite) TestDeleteSuccessful() {
 	}
 
 	suite.mockPlatform.
-		On("DeleteProject", mock.MatchedBy(verifyDeleteProject)).
+		On("DeleteProject", mock.Anything, mock.MatchedBy(verifyDeleteProject)).
 		Return(nil).
 		Once()
 
@@ -1684,7 +1687,7 @@ func (suite *projectTestSuite) TestDeleteWithFunctions() {
 		suite.Run(testCase.name, func() {
 			testCase.deleteProjectOptions.AuthSession = &auth.NopSession{}
 			suite.mockPlatform.
-				On("DeleteProject", testCase.deleteProjectOptions).
+				On("DeleteProject", mock.Anything, testCase.deleteProjectOptions).
 				Return(testCase.deleteProjectReturnedError).
 				Once()
 
@@ -1767,37 +1770,37 @@ func (suite *projectTestSuite) TestImportSuccessful() {
 	}
 
 	suite.mockPlatform.
-		On("GetProjects", mock.MatchedBy(verifyGetProjects)).
+		On("GetProjects", mock.Anything, mock.MatchedBy(verifyGetProjects)).
 		Return([]platform.Project{}, nil).
 		Once()
 
 	suite.mockPlatform.
-		On("CreateProject", mock.MatchedBy(verifyCreateProject)).
+		On("CreateProject", mock.Anything, mock.MatchedBy(verifyCreateProject)).
 		Return(nil).
 		Once()
 
 	suite.mockPlatform.
-		On("GetProjects", mock.MatchedBy(verifyGetProjects)).
+		On("GetProjects", mock.Anything, mock.MatchedBy(verifyGetProjects)).
 		Return([]platform.Project{&createdProject}, nil).
 		Twice()
 
 	suite.mockPlatform.
-		On("GetFunctions", mock.MatchedBy(verifyGetFunctions)).
+		On("GetFunctions", mock.Anything, mock.MatchedBy(verifyGetFunctions)).
 		Return([]platform.Function{}, nil).
 		Once()
 
 	suite.mockPlatform.
-		On("CreateFunction", mock.MatchedBy(verifyCreateFunction)).
+		On("CreateFunction", mock.Anything, mock.MatchedBy(verifyCreateFunction)).
 		Return(&platform.CreateFunctionResult{}, nil).
 		Once()
 
 	suite.mockPlatform.
-		On("CreateFunctionEvent", mock.MatchedBy(verifyCreateFunctionEvent)).
+		On("CreateFunctionEvent", mock.Anything, mock.MatchedBy(verifyCreateFunctionEvent)).
 		Return(nil).
 		Once()
 
 	suite.mockPlatform.
-		On("CreateAPIGateway", mock.MatchedBy(verifyCreateAPIGateway)).
+		On("CreateAPIGateway", mock.Anything, mock.MatchedBy(verifyCreateAPIGateway)).
 		Return(nil).
 		Once()
 
@@ -1952,27 +1955,27 @@ func (suite *projectTestSuite) TestImportFunctionExistsSuccessful() {
 	}
 
 	suite.mockPlatform.
-		On("GetProjects", mock.MatchedBy(verifyGetProjects)).
+		On("GetProjects", mock.Anything, mock.MatchedBy(verifyGetProjects)).
 		Return([]platform.Project{}, nil).
 		Once()
 
 	suite.mockPlatform.
-		On("CreateProject", mock.MatchedBy(verifyCreateProject)).
+		On("CreateProject", mock.Anything, mock.MatchedBy(verifyCreateProject)).
 		Return(nil).
 		Once()
 
 	suite.mockPlatform.
-		On("GetProjects", mock.MatchedBy(verifyGetProjects)).
+		On("GetProjects", mock.Anything, mock.MatchedBy(verifyGetProjects)).
 		Return([]platform.Project{&createdProject}, nil).
 		Twice()
 
 	suite.mockPlatform.
-		On("GetFunctions", mock.MatchedBy(verifyGetFunctions)).
+		On("GetFunctions", mock.Anything, mock.MatchedBy(verifyGetFunctions)).
 		Return([]platform.Function{&existingFunction1}, nil).
 		Once()
 
 	suite.mockPlatform.
-		On("CreateAPIGateway", mock.MatchedBy(verifyCreateAPIGateway)).
+		On("CreateAPIGateway", mock.Anything, mock.MatchedBy(verifyCreateAPIGateway)).
 		Return(nil).
 		Once()
 
@@ -2159,7 +2162,7 @@ func (suite *functionEventTestSuite) TestGetDetailSuccessful() {
 	}
 
 	suite.mockPlatform.
-		On("GetFunctionEvents", mock.MatchedBy(verifyGetFunctionEvents)).
+		On("GetFunctionEvents", mock.Anything, mock.MatchedBy(verifyGetFunctionEvents)).
 		Return([]platform.FunctionEvent{&returnedFunctionEvent}, nil).
 		Once()
 
@@ -2247,7 +2250,7 @@ func (suite *functionEventTestSuite) TestGetListSuccessful() {
 	}
 
 	suite.mockPlatform.
-		On("GetFunctionEvents", mock.MatchedBy(verifyGetFunctionEvents)).
+		On("GetFunctionEvents", mock.Anything, mock.MatchedBy(verifyGetFunctionEvents)).
 		Return([]platform.FunctionEvent{&returnedFunctionEvent1, &returnedFunctionEvent2}, nil).
 		Once()
 
@@ -2341,7 +2344,7 @@ func (suite *functionEventTestSuite) TestCreateSuccessful() {
 	}
 
 	suite.mockPlatform.
-		On("CreateFunctionEvent", mock.MatchedBy(verifyCreateFunctionEvent)).
+		On("CreateFunctionEvent", mock.Anything, mock.MatchedBy(verifyCreateFunctionEvent)).
 		Return(nil).
 		Once()
 
@@ -2382,7 +2385,7 @@ func (suite *functionEventTestSuite) TestCreateNoMetadata() {
 
 func (suite *functionEventTestSuite) TestCreateNoName() {
 	suite.mockPlatform.
-		On("CreateFunctionEvent", mock.Anything).
+		On("CreateFunctionEvent", mock.Anything, mock.Anything).
 		Return(nil).
 		Once()
 
@@ -2453,7 +2456,7 @@ func (suite *functionEventTestSuite) TestUpdateSuccessful() {
 	}
 
 	suite.mockPlatform.
-		On("UpdateFunctionEvent", mock.MatchedBy(verifyUpdateFunctionEvent)).
+		On("UpdateFunctionEvent", mock.Anything, mock.MatchedBy(verifyUpdateFunctionEvent)).
 		Return(nil).
 		Once()
 
@@ -2511,7 +2514,7 @@ func (suite *functionEventTestSuite) TestDeleteSuccessful() {
 	}
 
 	suite.mockPlatform.
-		On("DeleteFunctionEvent", mock.MatchedBy(verifyDeleteFunctionEvent)).
+		On("DeleteFunctionEvent", mock.Anything, mock.MatchedBy(verifyDeleteFunctionEvent)).
 		Return(nil).
 		Once()
 
@@ -2649,7 +2652,7 @@ func (suite *apiGatewayTestSuite) TestGetDetailSuccessful() {
 	}
 
 	suite.mockPlatform.
-		On("GetAPIGateways", mock.MatchedBy(verifyGetAPIGateways)).
+		On("GetAPIGateways", mock.Anything, mock.MatchedBy(verifyGetAPIGateways)).
 		Return([]platform.APIGateway{&returnedAPIGateway}, nil).
 		Once()
 
@@ -2779,7 +2782,7 @@ func (suite *apiGatewayTestSuite) TestGetListSuccessful() {
 	}
 
 	suite.mockPlatform.
-		On("GetAPIGateways", mock.MatchedBy(verifyGetAPIGateways)).
+		On("GetAPIGateways", mock.Anything, mock.MatchedBy(verifyGetAPIGateways)).
 		Return([]platform.APIGateway{&returnedAPIGateway1, &returnedAPIGateway2}, nil).
 		Once()
 
@@ -2898,7 +2901,7 @@ func (suite *apiGatewayTestSuite) TestCreateSuccessful() {
 	}
 
 	suite.mockPlatform.
-		On("CreateAPIGateway", mock.MatchedBy(verifyCreateAPIGateway)).
+		On("CreateAPIGateway", mock.Anything, mock.MatchedBy(verifyCreateAPIGateway)).
 		Return(nil).
 		Once()
 
@@ -2963,7 +2966,7 @@ func (suite *apiGatewayTestSuite) TestUpdateSuccessful() {
 	}
 
 	suite.mockPlatform.
-		On("UpdateAPIGateway", mock.MatchedBy(verifyUpdateAPIGateway)).
+		On("UpdateAPIGateway", mock.Anything, mock.MatchedBy(verifyUpdateAPIGateway)).
 		Return(nil).
 		Once()
 
@@ -3018,7 +3021,7 @@ func (suite *apiGatewayTestSuite) TestDeleteSuccessful() {
 	}
 
 	suite.mockPlatform.
-		On("DeleteAPIGateway", mock.MatchedBy(verifyDeleteAPIGateway)).
+		On("DeleteAPIGateway", mock.Anything, mock.MatchedBy(verifyDeleteAPIGateway)).
 		Return(nil).
 		Once()
 
@@ -3052,6 +3055,129 @@ func (suite *apiGatewayTestSuite) sendRequestWithInvalidBody(method string, body
 		&expectedStatusCode,
 		ecv.Verify)
 
+	suite.mockPlatform.AssertExpectations(suite.T())
+}
+
+//
+// Stream
+//
+
+type v3ioStreamTestSuite struct {
+	dashboardTestSuite
+}
+
+func (suite *v3ioStreamTestSuite) TestGetStreamsSuccessful() {
+
+	returnedFunction1 := platform.AbstractFunction{}
+	returnedFunction1.Config.Meta.Name = "f1"
+	returnedFunction1.Config.Meta.Namespace = "some-namespace"
+	returnedFunction1.Config.Spec.Runtime = "r1"
+	returnedFunction1.Config.Spec.Triggers = map[string]functionconfig.Trigger{
+		"stream-trig-1": {
+			Kind: "v3ioStream",
+			URL:  "https://some.address.com:8080/container-1/some/stream/path@consumer-group-1",
+			Attributes: map[string]interface{}{
+				"consumerGroup": "consumer-group-1",
+				"containerName": "container-1",
+				"streamPath":    "/some/stream/path",
+			},
+		},
+	}
+
+	returnedFunction2 := platform.AbstractFunction{}
+	returnedFunction2.Config.Meta.Name = "f2"
+	returnedFunction2.Config.Meta.Namespace = "some-namespace"
+	returnedFunction2.Config.Spec.Runtime = "r2"
+	returnedFunction2.Config.Spec.Triggers = map[string]functionconfig.Trigger{
+		"stream-trig-2": {
+			Kind: "v3ioStream",
+			URL:  "https://some.address.com:8080/container-2/other/stream/path@consumer-group-2",
+			Attributes: map[string]interface{}{
+				"consumerGroup": "consumer-group-2",
+				"containerName": "container-2",
+				"streamPath":    "/other/stream/path",
+			},
+		},
+		"http-trig-3": {
+			Kind: "http",
+			URL:  "https://some.address.com:8080",
+		},
+	}
+
+	// verify
+	verifyGetFunctions := func(getFunctionsOptions *platform.GetFunctionsOptions) bool {
+		suite.Require().Equal("", getFunctionsOptions.Name)
+		suite.Require().Equal("some-namespace", getFunctionsOptions.Namespace)
+
+		return true
+	}
+
+	suite.mockPlatform.
+		On("GetFunctions", mock.Anything, mock.MatchedBy(verifyGetFunctions)).
+		Return([]platform.Function{&returnedFunction1, &returnedFunction2}, nil).
+		Once()
+
+	headers := map[string]string{
+		"x-nuclio-function-namespace": "some-namespace",
+		"x-nuclio-project-namespace":  "some-namespace",
+		"x-nuclio-project-name":       "p1",
+	}
+
+	expectedStatusCode := http.StatusOK
+	expectedResponseBody := `{
+"f1@stream-trig-1": {
+            "consumerGroup":"consumer-group-1",
+            "containerName":"container-1",
+            "streamPath":"/some/stream/path"
+        },
+        "f2@stream-trig-2": {
+            "consumerGroup":"consumer-group-2",
+            "containerName":"container-2",
+            "streamPath":"/other/stream/path"
+        }
+}`
+
+	suite.sendRequest("GET",
+		"/api/v3io_streams",
+		headers,
+		nil,
+		&expectedStatusCode,
+		expectedResponseBody)
+
+	suite.mockPlatform.AssertExpectations(suite.T())
+}
+
+func (suite *v3ioStreamTestSuite) TestGetStreamsNoProjectName() {
+
+	headers := map[string]string{
+		"x-nuclio-project-namespace": "some-namespace",
+	}
+
+	expectedStatusCode := http.StatusBadRequest
+
+	suite.sendRequest("GET",
+		"/api/v3io_streams",
+		headers,
+		nil,
+		&expectedStatusCode,
+		nil)
+	suite.mockPlatform.AssertExpectations(suite.T())
+}
+
+func (suite *v3ioStreamTestSuite) TestGetStreamsNoNamespace() {
+
+	headers := map[string]string{
+		"x-nuclio-project-names": "some-name",
+	}
+
+	expectedStatusCode := http.StatusBadRequest
+
+	suite.sendRequest("GET",
+		"/api/v3io_streams",
+		headers,
+		nil,
+		&expectedStatusCode,
+		nil)
 	suite.mockPlatform.AssertExpectations(suite.T())
 }
 
@@ -3220,5 +3346,6 @@ func TestDashboardTestSuite(t *testing.T) {
 	suite.Run(t, new(projectTestSuite))
 	suite.Run(t, new(functionEventTestSuite))
 	suite.Run(t, new(apiGatewayTestSuite))
+	suite.Run(t, new(v3ioStreamTestSuite))
 	suite.Run(t, new(miscTestSuite))
 }

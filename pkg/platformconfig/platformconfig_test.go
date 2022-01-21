@@ -1,4 +1,4 @@
-// +build test_unit
+//go:build test_unit
 
 /*
 Copyright 2017 The Nuclio Authors.
@@ -31,6 +31,7 @@ import (
 	"github.com/nuclio/zap"
 	"github.com/stretchr/testify/suite"
 	appsv1 "k8s.io/api/apps/v1"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -52,6 +53,10 @@ webAdmin:
   enabled: true
   listenAddress: :8081
 kube:
+  defaultFunctionTolerations:
+  - key: somekey
+    value: somevalue
+    effect: NoSchedule
   defaultFunctionNodeSelector:
     defaultFunctionNodeSelectorKey: defaultFunctionNodeSelectorValue
 logger:
@@ -137,6 +142,14 @@ metrics:
 		"defaultFunctionNodeSelectorKey": "defaultFunctionNodeSelectorValue",
 	}
 
+	expectedConfiguration.Kube.DefaultFunctionTolerations = []corev1.Toleration{
+		{
+			Key:    "somekey",
+			Value:  "somevalue",
+			Effect: corev1.TaintEffectNoSchedule,
+		},
+	}
+
 	// metric
 	expectedConfiguration.Metrics.System = []string{"mypush"}
 	expectedConfiguration.Metrics.Functions = []string{"mypush"}
@@ -191,19 +204,19 @@ logger:
 		"prod-es": {
 			Level: "debug",
 			Sink: LoggerSink{
-				Kind: "elasticsearch",
+				Kind: LoggerSinkKindElasticsearch,
 				URL:  "http://20.0.1:9200",
 			},
 		},
 		"stdout": {
 			Level: "info",
 			Sink: LoggerSink{
-				Kind: "stdout",
+				Kind: LoggerSinkKindStdout,
 			},
 		},
 	}
 
-	suite.Require().Empty(cmp.Diff(&expectedSystemLoggerSinks, &systemLoggerSinks, cmpopts.IgnoreUnexported(Config{})))
+	suite.Require().Empty(cmp.Diff(&expectedSystemLoggerSinks, &systemLoggerSinks, cmpopts.IgnoreUnexported(LoggerSinkWithLevel{})))
 }
 
 func (suite *PlatformConfigTestSuite) TestGetSystemLoggerSinksInvalidSink() {
@@ -265,12 +278,14 @@ logger:
 		"stdout": {
 			Level: "info",
 			Sink: LoggerSink{
-				Kind: "stdout",
+				Kind: LoggerSinkKindStdout,
 			},
 		},
 	}
 
-	suite.Require().Empty(cmp.Diff(&expectedFunctionLoggerSinks, &functionLoggerSinks, cmpopts.IgnoreUnexported(Config{})))
+	suite.Require().Empty(cmp.Diff(&expectedFunctionLoggerSinks,
+		&functionLoggerSinks,
+		cmpopts.IgnoreUnexported(LoggerSinkWithLevel{})))
 }
 
 func (suite *PlatformConfigTestSuite) TestGetFunctionLoggerSinksWithFunctionConfig() {
@@ -315,19 +330,21 @@ logger:
 		"stdout": {
 			Level: "warn",
 			Sink: LoggerSink{
-				Kind: "stdout",
+				Kind: LoggerSinkKindStdout,
 			},
 		},
 		"staging-es": {
 			Level: "debug",
 			Sink: LoggerSink{
-				Kind: "elasticsearch",
+				Kind: LoggerSinkKindElasticsearch,
 				URL:  "http://10.0.0.1:9200",
 			},
 		},
 	}
 
-	suite.Require().Empty(cmp.Diff(&expectedFunctionLoggerSinks, &functionLoggerSinks, cmpopts.IgnoreUnexported(Config{})))
+	suite.Require().Empty(cmp.Diff(&expectedFunctionLoggerSinks,
+		&functionLoggerSinks,
+		cmpopts.IgnoreUnexported(LoggerSinkWithLevel{})))
 }
 
 func (suite *PlatformConfigTestSuite) TestGetFunctionLoggerSinksInvalidSink() {

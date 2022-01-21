@@ -17,6 +17,7 @@ limitations under the License.
 package command
 
 import (
+	"context"
 	"time"
 
 	"github.com/nuclio/nuclio/pkg/functionconfig"
@@ -31,7 +32,7 @@ type deleteCommandeer struct {
 	rootCommandeer *RootCommandeer
 }
 
-func newDeleteCommandeer(rootCommandeer *RootCommandeer) *deleteCommandeer {
+func newDeleteCommandeer(ctx context.Context, rootCommandeer *RootCommandeer) *deleteCommandeer {
 	commandeer := &deleteCommandeer{
 		rootCommandeer: rootCommandeer,
 	}
@@ -42,10 +43,10 @@ func newDeleteCommandeer(rootCommandeer *RootCommandeer) *deleteCommandeer {
 		Short:   "Delete resources",
 	}
 
-	deleteFunctionCommand := newDeleteFunctionCommandeer(commandeer).cmd
-	deleteProjectCommand := newDeleteProjectCommandeer(commandeer).cmd
-	deleteFunctionEventCommand := newDeleteFunctionEventCommandeer(commandeer).cmd
-	deleteAPIGatewayCommand := newDeleteAPIGatewayCommandeer(commandeer).cmd
+	deleteFunctionCommand := newDeleteFunctionCommandeer(ctx, commandeer).cmd
+	deleteProjectCommand := newDeleteProjectCommandeer(ctx, commandeer).cmd
+	deleteFunctionEventCommand := newDeleteFunctionEventCommandeer(ctx, commandeer).cmd
+	deleteAPIGatewayCommand := newDeleteAPIGatewayCommandeer(ctx, commandeer).cmd
 
 	cmd.AddCommand(
 		deleteFunctionCommand,
@@ -64,7 +65,7 @@ type deleteFunctionCommandeer struct {
 	functionConfig functionconfig.Config
 }
 
-func newDeleteFunctionCommandeer(deleteCommandeer *deleteCommandeer) *deleteFunctionCommandeer {
+func newDeleteFunctionCommandeer(ctx context.Context, deleteCommandeer *deleteCommandeer) *deleteFunctionCommandeer {
 	commandeer := &deleteFunctionCommandeer{
 		deleteCommandeer: deleteCommandeer,
 		functionConfig:   *functionconfig.NewConfig(),
@@ -89,7 +90,7 @@ func newDeleteFunctionCommandeer(deleteCommandeer *deleteCommandeer) *deleteFunc
 			commandeer.functionConfig.Meta.Name = args[0]
 			commandeer.functionConfig.Meta.Namespace = deleteCommandeer.rootCommandeer.namespace
 
-			return deleteCommandeer.rootCommandeer.platform.DeleteFunction(&platform.DeleteFunctionOptions{
+			return deleteCommandeer.rootCommandeer.platform.DeleteFunction(ctx, &platform.DeleteFunctionOptions{
 				FunctionConfig: commandeer.functionConfig,
 			})
 		},
@@ -108,7 +109,7 @@ type deleteProjectCommandeer struct {
 	waitTimeout      time.Duration
 }
 
-func newDeleteProjectCommandeer(deleteCommandeer *deleteCommandeer) *deleteProjectCommandeer {
+func newDeleteProjectCommandeer(ctx context.Context, deleteCommandeer *deleteCommandeer) *deleteProjectCommandeer {
 	commandeer := &deleteProjectCommandeer{
 		deleteCommandeer: deleteCommandeer,
 	}
@@ -132,7 +133,7 @@ func newDeleteProjectCommandeer(deleteCommandeer *deleteCommandeer) *deleteProje
 			commandeer.projectMeta.Name = args[0]
 			commandeer.projectMeta.Namespace = deleteCommandeer.rootCommandeer.namespace
 
-			return deleteCommandeer.rootCommandeer.platform.DeleteProject(&platform.DeleteProjectOptions{
+			return deleteCommandeer.rootCommandeer.platform.DeleteProject(ctx, &platform.DeleteProjectOptions{
 				Meta:     commandeer.projectMeta,
 				Strategy: platform.ResolveProjectDeletionStrategyOrDefault(commandeer.deletionStrategy),
 
@@ -156,7 +157,7 @@ type deleteAPIGatewayCommandeer struct {
 	apiGatewayMeta platform.APIGatewayMeta
 }
 
-func newDeleteAPIGatewayCommandeer(deleteCommandeer *deleteCommandeer) *deleteAPIGatewayCommandeer {
+func newDeleteAPIGatewayCommandeer(ctx context.Context, deleteCommandeer *deleteCommandeer) *deleteAPIGatewayCommandeer {
 	commandeer := &deleteAPIGatewayCommandeer{
 		deleteCommandeer: deleteCommandeer,
 	}
@@ -180,7 +181,7 @@ func newDeleteAPIGatewayCommandeer(deleteCommandeer *deleteCommandeer) *deleteAP
 			commandeer.apiGatewayMeta.Name = args[0]
 			commandeer.apiGatewayMeta.Namespace = deleteCommandeer.rootCommandeer.namespace
 
-			return deleteCommandeer.rootCommandeer.platform.DeleteAPIGateway(&platform.DeleteAPIGatewayOptions{
+			return deleteCommandeer.rootCommandeer.platform.DeleteAPIGateway(ctx, &platform.DeleteAPIGatewayOptions{
 				Meta: commandeer.apiGatewayMeta,
 			})
 		},
@@ -196,7 +197,7 @@ type deleteFunctionEventCommandeer struct {
 	functionEventMeta platform.FunctionEventMeta
 }
 
-func newDeleteFunctionEventCommandeer(deleteCommandeer *deleteCommandeer) *deleteFunctionEventCommandeer {
+func newDeleteFunctionEventCommandeer(ctx context.Context, deleteCommandeer *deleteCommandeer) *deleteFunctionEventCommandeer {
 	commandeer := &deleteFunctionEventCommandeer{
 		deleteCommandeer: deleteCommandeer,
 	}
@@ -220,7 +221,7 @@ func newDeleteFunctionEventCommandeer(deleteCommandeer *deleteCommandeer) *delet
 			commandeer.functionEventMeta.Name = args[0]
 			commandeer.functionEventMeta.Namespace = deleteCommandeer.rootCommandeer.namespace
 
-			return deleteCommandeer.rootCommandeer.platform.DeleteFunctionEvent(&platform.DeleteFunctionEventOptions{
+			return deleteCommandeer.rootCommandeer.platform.DeleteFunctionEvent(ctx, &platform.DeleteFunctionEventOptions{
 				Meta: commandeer.functionEventMeta,
 			})
 		},
