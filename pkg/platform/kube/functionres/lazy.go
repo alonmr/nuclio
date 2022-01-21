@@ -881,18 +881,18 @@ func (lc *lazyClient) createOrUpdateDeployment(ctx context.Context,
 		deployment.Spec.Template.Spec.PriorityClassName = function.Spec.PriorityClassName
 		deployment.Spec.Template.Spec.PreemptionPolicy = function.Spec.PreemptionPolicy
 
-		if function.Spec.DeletePreDeployment {
+		if function.Spec.DeletePreRedeploy {
 
 			// Delete Deployment if exists
 			propagationPolicy := metav1.DeletePropagationForeground
-			deleteOptions := &metav1.DeleteOptions{
+			deleteOptions := metav1.DeleteOptions{
 				PropagationPolicy: &propagationPolicy,
 			}
 			deploymentName := kube.DeploymentNameFromFunctionName(function.Name)
 			lc.logger.InfoWith("Deleting deployment",
 				"namespace", function.Namespace,
 				"deploymentName", deploymentName)
-			err = lc.kubeClientSet.AppsV1().Deployments(function.Namespace).Delete(deploymentName, deleteOptions)
+			err = lc.kubeClientSet.AppsV1().Deployments(function.Namespace).Delete(ctx, deploymentName, deleteOptions)
 			if err != nil {
 				if !apierrors.IsNotFound(err) {
 					return nil, errors.Wrap(err, "Failed to delete function pre deployment")
@@ -907,16 +907,17 @@ func (lc *lazyClient) createOrUpdateDeployment(ctx context.Context,
 			if err := lc.enrichDeploymentFromPlatformConfiguration(function, deployment, createDeploymentResourceMethod); err != nil {
 				return nil, err
 			}
-			return lc.kubeClientSet.AppsV1().Deployments(function.Namespace).Create(deployment)
-		}
+			return lc.kubeClientSet.AppsV1().Deployments(function.Namespace).Create(ctx, deployment, metav1.CreateOptions{})
+		} else {
 
-		// enrich deployment spec with default fields that were passed inside the platform configuration
-		// performed on update too, in case the platform config has been modified after the creation of this deployment
-		if err := lc.enrichDeploymentFromPlatformConfiguration(function, deployment, method); err != nil {
-			return nil, err
-		}
+			// enrich deployment spec with default fields that were passed inside the platform configuration
+			// performed on update too, in case the platform config has been modified after the creation of this deployment
+			if err := lc.enrichDeploymentFromPlatformConfiguration(function, deployment, method); err != nil {
+				return nil, err
+			}
 
-		return lc.kubeClientSet.AppsV1().Deployments(function.Namespace).Update(ctx, deployment, metav1.UpdateOptions{})
+			return lc.kubeClientSet.AppsV1().Deployments(function.Namespace).Update(ctx, deployment, metav1.UpdateOptions{})
+		}
 	}
 
 	resource, err := lc.createOrUpdateResource(ctx,
